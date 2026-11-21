@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sloplinter"
+version = "0.1.0"
+description = "Zero-bloat CLI linter that detects AI-generated code slop across Python, JS/TS, Rust, C/C++, C#, Go, and Java"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+keywords = ["linter", "ast", "cli", "ai", "code-quality"]
+dependencies = [
+    "rich>=13.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/an1zy/slopcheck"
+Repository = "https://github.com/an1zy/slopcheck"
+
+[project.scripts]
+slopcheck = "slopcheck.cli:main"
+sloplinter = "slopcheck.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["slopcheck*"]
