@@ -4,11 +4,16 @@ from slopcheck.core import (
     iter_python_files,
     iter_source_files,
 )
+from slopcheck.scanner import ScanResult, get_badge_url, get_verdict, scan_target
 
 __all__ = [
     "Issue",
+    "ScanResult",
     "calculate_score",
+    "get_badge_url",
+    "get_verdict",
     "iter_python_files",
     "iter_source_files",
+    "scan_target",
 ]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

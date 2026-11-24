@@ -1,10 +1,10 @@
+import bisect
 from pathlib import Path
 import re
 
 from slopcheck.core import Issue
 from slopcheck.rules import (
-    _count_word_matches,
-    _extract_words,
+    _is_tautological_comment,
     _match_ai_cliche,
     AI_EMOJIS,
     DEBUG_MARKERS,
@@ -13,10 +13,19 @@ from slopcheck.rules import (
 TOKEN_SPEC = re.compile(
     r'(?P<BLOCK_COMMENT>/\*.*?\*/)'
     r'|(?P<LINE_COMMENT>//[^\n]*)'
-    r'|(?P<STRING_DOUBLE>"(\\.|[^"\\])*")'
-    r'|(?P<STRING_SINGLE>\'(\\.|[^\'\\])*\')'
-    r'|(?P<STRING_BACKTICK>`(\\.|[^`\\])*`)',
-    re.DOTALL
+    r'|(?P<STRING_DOUBLE>"(?:\\.|[^"\\\n])*")'
+    r'|(?P<STRING_SINGLE>\'(?:\\.|[^\'\\\n])*\')'
+    r'|(?P<STRING_BACKTICK>`(?:\\.|[^`\\])*`)',
+    re.DOTALL,
+)
+
+# Rust lifetimes like 'a share single quotes, so only treat single-char literals as strings
+RUST_TOKEN_SPEC = re.compile(
+    r'(?P<BLOCK_COMMENT>/\*.*?\*/)'
+    r'|(?P<LINE_COMMENT>//[^\n]*)'
+    r'|(?P<STRING_DOUBLE>"(?:\\.|[^"\\\n])*")'
+    r'|(?P<STRING_SINGLE>\'(?:\\[^\n]|[^\'\\\n])\')',
+    re.DOTALL,
 )
 
 CALL_PATTERN = re.compile(
@@ -49,22 +58,32 @@ def _extract_c_strings(text: str) -> list[str]:
 def _is_captain_comment(comment_text: str, next_line: str) -> bool:
     if not next_line or next_line.startswith(("//", "/*", "*")):
         return False
-    c_words = _extract_words(comment_text)
-    code_words = _extract_words(next_line)
-    if len(c_words) < 2 or not code_words:
-        return False
-    return _count_word_matches(c_words, code_words) >= 2
+    return _is_tautological_comment(comment_text, next_line)
 
 
-def _extract_c_tokens(source: str) -> tuple[list[dict], str]:
+def _build_line_offsets(text: str) -> list[int]:
+    offsets = [0]
+    idx = text.find("\n")
+    while idx != -1:
+        offsets.append(idx + 1)
+        idx = text.find("\n", idx + 1)
+    return offsets
+
+
+def _extract_c_tokens(source: str, suffix: str = "", line_offsets: list[int] | None = None) -> tuple[list[dict], str]:
     comments: list[dict] = []
+    spec = RUST_TOKEN_SPEC if suffix == ".rs" else TOKEN_SPEC
+    offsets = line_offsets if line_offsets is not None else _build_line_offsets(source)
 
     def repl(m: re.Match) -> str:
         kind = m.lastgroup
+        if kind not in ("LINE_COMMENT", "BLOCK_COMMENT"):
+            return m.group(0)
+
         start = m.start()
         prev_nl = source.rfind('\n', 0, start)
         prefix = source[prev_nl + 1:start]
-        line = source[:start].count('\n') + 1
+        line = bisect.bisect_right(offsets, start)
 
         if kind == "LINE_COMMENT":
             comments.append({
@@ -75,18 +94,15 @@ def _extract_c_tokens(source: str) -> tuple[list[dict], str]:
             })
             return " " * len(m.group(0))
 
-        if kind == "BLOCK_COMMENT":
-            comments.append({
-                "type": "block",
-                "text": m.group(0),
-                "line": line,
-                "standalone": prefix.strip() == "",
-            })
-            return "".join('\n' if c == '\n' else ' ' for c in m.group(0))
+        comments.append({
+            "type": "block",
+            "text": m.group(0),
+            "line": line,
+            "standalone": prefix.strip() == "",
+        })
+        return "".join('\n' if c == '\n' else ' ' for c in m.group(0))
 
-        return m.group(0)
-
-    clean_code = TOKEN_SPEC.sub(repl, source)
+    clean_code = spec.sub(repl, source)
     return comments, clean_code
 
 
@@ -133,12 +149,12 @@ def _check_comments(path: Path, comments: list[dict], lines: list[str]) -> list[
     return issues
 
 
-def _check_output_calls(path: Path, clean_code: str) -> list[Issue]:
+def _check_output_calls(path: Path, clean_code: str, offsets: list[int]) -> list[Issue]:
     issues: list[Issue] = []
     for m in CALL_PATTERN.finditer(clean_code):
         args_text = m.group("args") if m.group("call") else m.group("cout_args")
         strs = _extract_c_strings(args_text)
-        line = clean_code[:m.start()].count('\n') + 1
+        line = bisect.bisect_right(offsets, m.start())
 
         if any(any(e in s for e in AI_EMOJIS) for s in strs):
             issues.append(
@@ -166,10 +182,10 @@ def _check_output_calls(path: Path, clean_code: str) -> list[Issue]:
     return issues
 
 
-def _check_silent_catch(path: Path, clean_code: str) -> list[Issue]:
+def _check_silent_catch(path: Path, clean_code: str, offsets: list[int]) -> list[Issue]:
     issues: list[Issue] = []
     for m in CATCH_PATTERN.finditer(clean_code):
-        line = clean_code[:m.start()].count('\n') + 1
+        line = bisect.bisect_right(offsets, m.start())
         issues.append(
             Issue(
                 path=path,
@@ -183,12 +199,13 @@ def _check_silent_catch(path: Path, clean_code: str) -> list[Issue]:
 
 
 def check_polyglot(path: Path, source: str) -> list[Issue]:
-    comments, clean_code = _extract_c_tokens(source)
+    offsets = _build_line_offsets(source)
+    comments, clean_code = _extract_c_tokens(source, path.suffix.lower(), offsets)
     lines = source.splitlines()
 
     issues: list[Issue] = []
     issues.extend(_check_comments(path, comments, lines))
-    issues.extend(_check_output_calls(path, clean_code))
-    issues.extend(_check_silent_catch(path, clean_code))
+    issues.extend(_check_output_calls(path, clean_code, offsets))
+    issues.extend(_check_silent_catch(path, clean_code, offsets))
     issues.sort(key=lambda i: (i.line, i.rule))
     return issues

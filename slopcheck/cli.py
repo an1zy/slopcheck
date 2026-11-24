@@ -1,14 +1,14 @@
 import argparse
-import ast
+import json
 from pathlib import Path
 import sys
-import time
 
 from rich.console import Console
 
-from slopcheck.core import Issue, calculate_score, iter_source_files
-from slopcheck.polyglot import check_polyglot
-from slopcheck.rules import ALL_RULES
+from slopcheck import __version__
+from slopcheck.diff import GitDiffError
+from slopcheck.scanner import ScanResult, get_badge_url, scan_target
+from slopcheck.svg import render_scorecard_svg
 
 RULE_COLORS = {
     "silent-except": "red",
@@ -25,27 +25,58 @@ RULE_COLORS = {
 }
 
 
-def get_verdict(score: int) -> tuple[str, str]:
-    if score <= 10:
-        return "CLEAN", "green"
-    if score <= 35:
-        return "SUSPICIOUS", "yellow"
-    if score <= 65:
-        return "VIBE-CODED", "magenta"
-    return "PURE SLOP", "red"
+def _render_console_report(
+    result: ScanResult,
+    max_score: int,
+    summary_only: bool,
+    top_n: int | None,
+) -> None:
+    console = Console(highlight=False)
+
+    if result.file_issues and not summary_only:
+        console.print()
+        items = list(result.file_issues.items())
+        if top_n is not None and top_n > 0:
+            items = sorted(
+                items,
+                key=lambda pair: sum(i.weight for i in pair[1]),
+                reverse=True,
+            )[:top_n]
+        for file_path, issues in items:
+            try:
+                display_path = file_path.relative_to(Path.cwd())
+            except ValueError:
+                display_path = file_path
+            console.print(f"[bold white]{display_path}[/]")
+            for issue in issues:
+                rule_color = RULE_COLORS.get(issue.rule, "white")
+                console.print(
+                    f"  [dim]{issue.line:>4}[/]  [{rule_color}]{issue.rule:<18}[/]  [dim]+{issue.weight:<2}[/]  {issue.message}"
+                )
+        console.print()
+
+    bar_width = 30
+    filled = int(round(bar_width * (result.score / 100)))
+    empty = bar_width - filled
+    color = result.verdict_color
+    bar = f"[{color}]{'█' * filled}[/][bright_black]{'░' * empty}[/]"
+
+    mode_tag = " [dim](diff)[/dim]" if result.diff_mode else ""
+    console.print(
+        f"  [bold white]Slop Score[/]{mode_tag}  [{color} bold]{result.score:>3}%[/]  {bar}  [{color} bold]{result.verdict}[/]"
+    )
+    console.print(
+        f"  [dim]Scanned {result.files_scanned} files ({result.total_lines:,} lines, {len(result.issues)} issues) in {result.elapsed:.3f}s[/dim]"
+    )
+    console.print()
+
+    if result.score > max_score:
+        console.print(
+            f"[bold red]FAILED:[/] Slop score {result.score} exceeds maximum allowed threshold of {max_score}\n"
+        )
 
 
-def get_badge_color(score: int) -> str:
-    if score <= 10:
-        return "brightgreen"
-    if score <= 35:
-        return "yellow"
-    if score <= 65:
-        return "orange"
-    return "red"
-
-
-def main() -> None:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="slopcheck",
         description="Linter for code slop, bloated docstrings, and cargo-cult comments.",
@@ -68,80 +99,93 @@ def main() -> None:
         action="store_true",
         help="Print a shields.io markdown badge instead of the full report",
     )
+    parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="Scan only added/modified lines in git working tree and untracked files",
+    )
+    parser.add_argument(
+        "--base",
+        type=str,
+        default=None,
+        help="Compare HEAD against git base ref (implies --diff), e.g. origin/main",
+    )
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Scan only staged git changes (implies --diff)",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print structured JSON output",
+    )
+    parser.add_argument(
+        "--svg",
+        type=Path,
+        default=None,
+        help="Write a dark-neon SVG scorecard to PATH",
+    )
+    parser.add_argument(
+        "--title",
+        type=str,
+        default=None,
+        help="Custom repository/project title for SVG scorecard",
+    )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="Directory or relative path prefix to skip (repeatable)",
+    )
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="Show only the final Slop Score summary bar",
+    )
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=None,
+        help="Show only top N worst files in console output",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+    return parser
+
+
+def main() -> None:
+    parser = _build_parser()
     args = parser.parse_args()
 
-    start_time = time.perf_counter()
-    files = list(iter_source_files(args.path))
-    total_lines = 0
-    all_issues: list[Issue] = []
-    file_issues: dict[Path, list[Issue]] = {}
-
-    for file_path in files:
-        try:
-            source = file_path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-
-        total_lines += len(source.splitlines())
-        current_issues: list[Issue] = []
-
-        if file_path.suffix == ".py":
-            try:
-                tree = ast.parse(source, filename=str(file_path))
-            except SyntaxError:
-                tree = None
-
-            for rule in ALL_RULES:
-                current_issues.extend(rule(file_path, source, tree))
-        else:
-            current_issues.extend(check_polyglot(file_path, source))
-
-        if current_issues:
-            current_issues.sort(key=lambda i: (i.line, i.rule))
-            file_issues[file_path] = current_issues
-            all_issues.extend(current_issues)
-
-    elapsed = time.perf_counter() - start_time
-    score = calculate_score(all_issues, total_lines)
-
-    if args.badge:
-        badge_color = get_badge_color(score)
-        print(f"![Slop Score](https://img.shields.io/badge/slop_score-{score}%25-{badge_color})")
-        if score > args.max_score:
-            sys.exit(1)
-        return
-
-    verdict, color = get_verdict(score)
-    console = Console(highlight=False)
-
-    if file_issues:
-        console.print()
-        for file_path, issues in file_issues.items():
-            try:
-                display_path = file_path.relative_to(Path.cwd())
-            except ValueError:
-                display_path = file_path
-            console.print(f"[bold white]{display_path}[/]")
-            for issue in issues:
-                rule_color = RULE_COLORS.get(issue.rule, "white")
-                console.print(
-                    f"  [dim]{issue.line:>4}[/]  [{rule_color}]{issue.rule:<18}[/]  [dim]+{issue.weight:<2}[/]  {issue.message}"
-                )
-        console.print()
-
-    bar_width = 30
-    filled = int(round(bar_width * (score / 100)))
-    empty = bar_width - filled
-    bar = f"[{color}]{'█' * filled}[/][bright_black]{'░' * empty}[/]"
-
-    console.print(f"  [bold white]Slop Score[/]  [{color} bold]{score:>3}%[/]  {bar}  [{color} bold]{verdict}[/]")
-    console.print(f"  [dim]Scanned {len(files)} files ({total_lines:,} lines) in {elapsed:.3f}s[/dim]")
-    console.print()
-
-    if score > args.max_score:
-        console.print(
-            f"[bold red]FAILED:[/] Slop score {score} exceeds maximum allowed threshold of {args.max_score}\n"
+    try:
+        result = scan_target(
+            args.path,
+            diff_mode=args.diff,
+            diff_base=args.base,
+            staged=args.staged,
+            excludes=tuple(args.exclude),
         )
+    except GitDiffError as exc:
+        print(f"slopcheck diff error: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    if args.svg is not None:
+        svg_text = render_scorecard_svg(result, title=args.title)
+        args.svg.parent.mkdir(parents=True, exist_ok=True)
+        args.svg.write_text(svg_text, encoding="utf-8")
+
+    if args.json:
+        print(json.dumps(result.to_dict(__version__), indent=2))
+    elif args.badge:
+        print(f"![Slop Score]({get_badge_url(result.score)})")
+    else:
+        _render_console_report(result, args.max_score, args.summary, args.top)
+
+    if result.score > args.max_score:
         sys.exit(1)
 
 

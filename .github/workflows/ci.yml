@@ -33,3 +33,5 @@ jobs:
       - name: Run slopcheck on codebase
         run: |
           slopcheck . --max-score 0
+          slopcheck . --json > /dev/null
+          slopcheck . --svg /tmp/scorecard.svg --title "an1zy/slopcheck"

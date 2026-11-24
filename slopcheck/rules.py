@@ -37,6 +37,45 @@ STOPWORDS = frozenset({
     "true", "false", "self", "args", "kwargs", "return", "pass",
 })
 
+RATIONALE_WORDS = frozenset({
+    "because", "since", "avoid", "prevent", "ensure", "required",
+    "otherwise", "workaround", "instead", "must", "need", "needs",
+    "unless", "without", "legacy", "compat",
+})
+
+DOC_DIRECTIVES = (
+    ":param",
+    ":type",
+    ":return",
+    ":rtype",
+    ":raises",
+    ".. version",
+    ".. note::",
+    ".. warning::",
+    ".. deprecated::",
+    ">>>",
+)
+
+
+def _is_sphinx_or_doctest(doc_text: str) -> bool:
+    lower = doc_text.lower()
+    return any(marker in lower for marker in DOC_DIRECTIVES)
+
+
+def _is_tautological_comment(comment_text: str, next_line: str) -> bool:
+    stripped = comment_text.lstrip()
+    if stripped.startswith(("#:", "///", "//!")):
+        return False
+    lower = stripped.lower()
+    if any(word in lower.split() for word in RATIONALE_WORDS):
+        return False
+    c_words = _extract_words(comment_text)
+    code_words = _extract_words(next_line)
+    if len(c_words) < 2 or len(c_words) > 6 or not code_words:
+        return False
+    matches = _count_word_matches(c_words, code_words)
+    return matches >= 2 and (matches / len(c_words)) >= 0.5
+
 
 def _extract_words(text: str) -> set[str]:
     words: set[str] = set()
@@ -216,138 +255,69 @@ def _is_redundant_boolean_if(node: ast.If) -> bool:
 def check_silent_except(path: Path, source: str, tree: ast.AST) -> list[Issue]:
     if tree is None:
         return []
-
     issues: list[Issue] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ExceptHandler):
-            continue
-
-        if node.type is not None and not (
-            isinstance(node.type, ast.Name) and node.type.id == "Exception"
-        ):
-            continue
-
-        if len(node.body) != 1:
-            continue
-
-        stmt = node.body[0]
-        is_silent = False
-        if isinstance(stmt, ast.Pass):
-            is_silent = True
-        elif (
-            isinstance(stmt, ast.Expr)
-            and isinstance(stmt.value, ast.Constant)
-            and stmt.value.value is Ellipsis
-        ):
-            is_silent = True
-        elif (
-            isinstance(stmt, ast.Expr)
-            and isinstance(stmt.value, ast.Call)
-            and isinstance(stmt.value.func, ast.Name)
-            and stmt.value.func.id == "print"
-        ):
-            is_silent = True
-
-        if is_silent:
-            issues.append(
-                Issue(
-                    path=path,
-                    line=node.lineno,
-                    rule="silent-except",
-                    message="Suppressed exception handler with pass, ellipsis, or print",
-                    weight=15,
-                )
-            )
+        if isinstance(node, ast.ExceptHandler):
+            issues.extend(_inspect_except_handler(path, node))
     return issues
 
 
 def check_bloat_docstring(path: Path, source: str, tree: ast.AST) -> list[Issue]:
     if tree is None:
         return []
-
     issues: list[Issue] = []
     for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            continue
-        if not node.body:
-            continue
-
-        first = node.body[0]
-        if not (
-            isinstance(first, ast.Expr)
-            and isinstance(first.value, ast.Constant)
-            and isinstance(first.value.value, str)
-        ):
-            continue
-
-        if first.end_lineno is None or node.end_lineno is None:
-            continue
-
-        doc_lines = first.end_lineno - first.lineno + 1
-        if doc_lines < 5:
-            continue
-
-        rest_lines = (node.end_lineno - first.end_lineno) if len(node.body) > 1 else 0
-        if doc_lines > rest_lines:
-            issues.append(
-                Issue(
-                    path=path,
-                    line=first.lineno,
-                    rule="bloat-docstring",
-                    message=f"Docstring ({doc_lines} lines) exceeds function body ({rest_lines} lines)",
-                    weight=8,
-                )
-            )
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            issues.extend(_inspect_function_def(path, node, check_doc=True, check_nesting=False, check_wrapper=False))
     return issues
 
 
-def check_ai_cliche(path: Path, source: str, tree: ast.AST) -> list[Issue]:
-    issues: list[Issue] = []
+def _safe_tokenize(source: str) -> list[tokenize.TokenInfo]:
     try:
-        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError, ValueError):
         return []
 
+
+def _check_comment_tokens(
+    path: Path,
+    source: str,
+    tokens: list[tokenize.TokenInfo],
+    check_cliche: bool = True,
+    check_captain: bool = True,
+    check_emoji: bool = True,
+) -> list[Issue]:
+    issues: list[Issue] = []
+    lines = source.splitlines() if check_captain else []
     for tok in tokens:
-        if tok.type == tokenize.COMMENT:
+        if tok.type != tokenize.COMMENT:
+            continue
+        line_no = tok.start[0]
+        if check_cliche:
             matched = _match_ai_cliche(tok.string)
             if matched:
                 issues.append(
                     Issue(
                         path=path,
-                        line=tok.start[0],
+                        line=line_no,
                         rule="ai-cliche",
                         message=f"AI cliché comment detected: '{matched}'",
                         weight=12,
                     )
                 )
-    return issues
-
-
-def check_captain_comment(path: Path, source: str, tree: ast.AST) -> list[Issue]:
-    issues: list[Issue] = []
-    lines = source.splitlines()
-    try:
-        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        return []
-
-    for tok in tokens:
-        if tok.type != tokenize.COMMENT or tok.line[:tok.start[1]].strip():
-            continue
-
-        line_no = tok.start[0]
-        if line_no >= len(lines):
-            continue
-
-        next_line = lines[line_no].strip()
-        if not next_line or next_line.startswith("#"):
-            continue
-
-        comment_words = _extract_words(tok.string)
-        code_words = _extract_words(next_line)
-        if len(comment_words) >= 2 and code_words:
-            if _count_word_matches(comment_words, code_words) >= 2:
+        if check_emoji and any(e in tok.string for e in AI_EMOJIS):
+            issues.append(
+                Issue(
+                    path=path,
+                    line=line_no,
+                    rule="emoji-slop",
+                    message="AI emoji detected in comment",
+                    weight=10,
+                )
+            )
+        if check_captain and not tok.line[:tok.start[1]].strip() and line_no < len(lines):
+            next_line = lines[line_no].strip()
+            if next_line and not next_line.startswith("#") and _is_tautological_comment(tok.string, next_line):
                 issues.append(
                     Issue(
                         path=path,
@@ -360,75 +330,199 @@ def check_captain_comment(path: Path, source: str, tree: ast.AST) -> list[Issue]
     return issues
 
 
-def check_emoji_slop(path: Path, source: str, tree: ast.AST) -> list[Issue]:
+def _inspect_except_handler(path: Path, node: ast.ExceptHandler) -> list[Issue]:
+    if node.type is not None and not (isinstance(node.type, ast.Name) and node.type.id == "Exception"):
+        return []
+    if len(node.body) != 1:
+        return []
+    stmt = node.body[0]
+    is_pass = isinstance(stmt, ast.Pass)
+    is_ellipsis = isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and stmt.value.value is Ellipsis
+    is_print = (
+        isinstance(stmt, ast.Expr)
+        and isinstance(stmt.value, ast.Call)
+        and isinstance(stmt.value.func, ast.Name)
+        and stmt.value.func.id == "print"
+    )
+    if is_pass or is_ellipsis or is_print:
+        return [
+            Issue(
+                path=path,
+                line=node.lineno,
+                rule="silent-except",
+                message="Suppressed exception handler with pass, ellipsis, or print",
+                weight=15,
+            )
+        ]
+    return []
+
+
+def _inspect_function_def(
+    path: Path,
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    check_doc: bool = True,
+    check_nesting: bool = True,
+    check_wrapper: bool = True,
+) -> list[Issue]:
     issues: list[Issue] = []
-    try:
-        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
-        for tok in tokens:
-            if tok.type == tokenize.COMMENT and any(e in tok.string for e in AI_EMOJIS):
+    if check_doc and node.body:
+        first = node.body[0]
+        if (
+            isinstance(first, ast.Expr)
+            and isinstance(first.value, ast.Constant)
+            and isinstance(first.value.value, str)
+            and first.end_lineno is not None
+            and node.end_lineno is not None
+        ):
+            doc_lines = first.end_lineno - first.lineno + 1
+            rest_lines = (node.end_lineno - first.end_lineno) if len(node.body) > 1 else 0
+            if doc_lines >= 5 and not _is_sphinx_or_doctest(first.value.value) and doc_lines > rest_lines:
                 issues.append(
                     Issue(
                         path=path,
-                        line=tok.start[0],
-                        rule="emoji-slop",
-                        message="AI emoji detected in comment",
-                        weight=10,
+                        line=first.lineno,
+                        rule="bloat-docstring",
+                        message=f"Docstring ({doc_lines} lines) exceeds function body ({rest_lines} lines)",
+                        weight=8,
                     )
                 )
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        pass
+    if check_nesting:
+        depth = _calc_nesting_depth(node)
+        if depth >= 4:
+            issues.append(
+                Issue(
+                    path=path,
+                    line=node.lineno,
+                    rule="deep-nesting",
+                    message=f"Deep control nesting (depth {depth} >= 4)",
+                    weight=10,
+                )
+            )
+    if check_wrapper and _is_useless_wrapper(node):
+        issues.append(
+            Issue(
+                path=path,
+                line=node.lineno,
+                rule="useless-wrapper",
+                message=f"Function '{node.name}' is a useless wrapper forwarding arguments",
+                weight=7,
+            )
+        )
+    return issues
 
-    if tree is not None:
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and _is_log_or_print(node.func) and _has_emoji_arg(node):
+
+def _inspect_call_node(
+    path: Path,
+    node: ast.Call,
+    check_emoji: bool = True,
+    check_debug: bool = True,
+) -> list[Issue]:
+    issues: list[Issue] = []
+    if check_emoji and _is_log_or_print(node.func) and _has_emoji_arg(node):
+        issues.append(
+            Issue(
+                path=path,
+                line=node.lineno,
+                rule="emoji-slop",
+                message="AI emoji detected in output/log statement",
+                weight=10,
+            )
+        )
+    if check_debug and isinstance(node.func, ast.Name) and node.func.id == "print" and node.args:
+        first_arg_strings = _extract_strings(node.args[0])
+        if first_arg_strings:
+            raw_text = first_arg_strings[0]
+            cleaned = raw_text.strip().lower()
+            if any(cleaned == m or cleaned.startswith(m) for m in DEBUG_MARKERS):
                 issues.append(
                     Issue(
                         path=path,
                         line=node.lineno,
-                        rule="emoji-slop",
-                        message="AI emoji detected in output/log statement",
-                        weight=10,
+                        rule="debug-print",
+                        message=f"Debug print statement detected: '{raw_text[:20]}'",
+                        weight=8,
                     )
                 )
     return issues
 
 
-def check_debug_print(path: Path, source: str, tree: ast.AST) -> list[Issue]:
+def scan_python(path: Path, source: str, tree: ast.AST | None) -> list[Issue]:
+    """Run all Python comment and AST slop checks in a single pass."""
+    tokens = _safe_tokenize(source)
+    issues = _check_comment_tokens(path, source, tokens)
     if tree is None:
-        return []
+        return issues
 
-    issues: list[Issue] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        if not (isinstance(node.func, ast.Name) and node.func.id == "print"):
-            continue
-        if not node.args:
-            continue
-
-        first_arg_strings = _extract_strings(node.args[0])
-        if not first_arg_strings:
-            continue
-
-        raw_text = first_arg_strings[0]
-        cleaned = raw_text.strip().lower()
-        if any(cleaned == m or cleaned.startswith(m) for m in DEBUG_MARKERS):
+        if isinstance(node, ast.ExceptHandler):
+            issues.extend(_inspect_except_handler(path, node))
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            issues.extend(_inspect_function_def(path, node))
+        elif isinstance(node, ast.Call):
+            issues.extend(_inspect_call_node(path, node))
+        elif isinstance(node, ast.Compare) and _is_redundant_compare(node):
             issues.append(
                 Issue(
                     path=path,
                     line=node.lineno,
-                    rule="debug-print",
-                    message=f"Debug print statement detected: '{raw_text[:20]}'",
+                    rule="redundant-boolean",
+                    message="Redundant explicit comparison with boolean literal",
+                    weight=6,
+                )
+            )
+        elif isinstance(node, ast.If) and _is_redundant_boolean_if(node):
+            issues.append(
+                Issue(
+                    path=path,
+                    line=node.lineno,
+                    rule="redundant-boolean",
+                    message="Redundant boolean return pattern in if/else",
+                    weight=6,
+                )
+            )
+        elif isinstance(node, ast.ImportFrom) and any(alias.name == "*" for alias in node.names):
+            issues.append(
+                Issue(
+                    path=path,
+                    line=node.lineno,
+                    rule="wildcard-import",
+                    message=f"Wildcard import 'from {node.module or '.'} import *'",
                     weight=8,
                 )
             )
     return issues
 
 
+def check_ai_cliche(path: Path, source: str, tree: ast.AST) -> list[Issue]:
+    return _check_comment_tokens(path, source, _safe_tokenize(source), check_cliche=True, check_captain=False, check_emoji=False)
+
+
+def check_captain_comment(path: Path, source: str, tree: ast.AST) -> list[Issue]:
+    return _check_comment_tokens(path, source, _safe_tokenize(source), check_cliche=False, check_captain=True, check_emoji=False)
+
+
+def check_emoji_slop(path: Path, source: str, tree: ast.AST) -> list[Issue]:
+    issues = _check_comment_tokens(path, source, _safe_tokenize(source), check_cliche=False, check_captain=False, check_emoji=True)
+    if tree is not None:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                issues.extend(_inspect_call_node(path, node, check_emoji=True, check_debug=False))
+    return issues
+
+
+def check_debug_print(path: Path, source: str, tree: ast.AST) -> list[Issue]:
+    if tree is None:
+        return []
+    issues: list[Issue] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            issues.extend(_inspect_call_node(path, node, check_emoji=False, check_debug=True))
+    return issues
+
+
 def check_redundant_boolean(path: Path, source: str, tree: ast.AST) -> list[Issue]:
     if tree is None:
         return []
-
     issues: list[Issue] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Compare) and _is_redundant_compare(node):
@@ -457,61 +551,38 @@ def check_redundant_boolean(path: Path, source: str, tree: ast.AST) -> list[Issu
 def check_deep_nesting(path: Path, source: str, tree: ast.AST) -> list[Issue]:
     if tree is None:
         return []
-
     issues: list[Issue] = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            depth = _calc_nesting_depth(node)
-            if depth >= 4:
-                issues.append(
-                    Issue(
-                        path=path,
-                        line=node.lineno,
-                        rule="deep-nesting",
-                        message=f"Deep control nesting (depth {depth} >= 4)",
-                        weight=10,
-                    )
-                )
+            issues.extend(_inspect_function_def(path, node, check_doc=False, check_nesting=True, check_wrapper=False))
     return issues
 
 
 def check_wildcard_import(path: Path, source: str, tree: ast.AST) -> list[Issue]:
     if tree is None:
         return []
-
     issues: list[Issue] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            if any(alias.name == "*" for alias in node.names):
-                issues.append(
-                    Issue(
-                        path=path,
-                        line=node.lineno,
-                        rule="wildcard-import",
-                        message=f"Wildcard import 'from {node.module or '.'} import *'",
-                        weight=8,
-                    )
+        if isinstance(node, ast.ImportFrom) and any(alias.name == "*" for alias in node.names):
+            issues.append(
+                Issue(
+                    path=path,
+                    line=node.lineno,
+                    rule="wildcard-import",
+                    message=f"Wildcard import 'from {node.module or '.'} import *'",
+                    weight=8,
                 )
+            )
     return issues
 
 
 def check_useless_wrapper(path: Path, source: str, tree: ast.AST) -> list[Issue]:
     if tree is None:
         return []
-
     issues: list[Issue] = []
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if _is_useless_wrapper(node):
-                issues.append(
-                    Issue(
-                        path=path,
-                        line=node.lineno,
-                        rule="useless-wrapper",
-                        message=f"Function '{node.name}' is a useless wrapper forwarding arguments",
-                        weight=7,
-                    )
-                )
+            issues.extend(_inspect_function_def(path, node, check_doc=False, check_nesting=False, check_wrapper=True))
     return issues
 
 

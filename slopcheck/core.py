@@ -15,11 +15,27 @@ SKIP_DIRS = frozenset({
     "bin",
     "obj",
     ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".turbo",
+    ".cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    ".tox",
+    ".nox",
+    ".eggs",
+    "coverage",
+    "htmlcov",
     "out",
     "vendor",
+    "Pods",
+    ".gradle",
 })
 
-SKIP_FILE_SUFFIXES = (".min.js", ".bundle.js", ".d.ts")
+SKIP_FILE_SUFFIXES = (".min.js", ".min.css", ".bundle.js", ".d.ts", ".generated.ts", ".generated.py")
+
+MAX_FILE_BYTES = 512 * 1024
 
 SUPPORTED_EXTENSIONS = frozenset({
     ".py",
@@ -53,23 +69,59 @@ def _is_skipped_file(name: str) -> bool:
     return any(lower_name.endswith(sfx) for sfx in SKIP_FILE_SUFFIXES)
 
 
-def iter_source_files(root: Path) -> Iterator[Path]:
+def _is_within_size_limit(path: Path) -> bool:
+    try:
+        return path.stat().st_size <= MAX_FILE_BYTES
+    except OSError:
+        return False
+
+
+def _matches_exclude(rel_path: str, excludes: tuple[str, ...]) -> bool:
+    if not excludes:
+        return False
+    norm = rel_path.replace("\\", "/")
+    parts = norm.split("/")
+    for pattern in excludes:
+        clean = pattern.strip().strip("/")
+        if not clean:
+            continue
+        if clean in parts or norm.startswith(clean + "/") or norm == clean:
+            return True
+    return False
+
+
+def iter_source_files(root: Path, excludes: tuple[str, ...] = ()) -> Iterator[Path]:
+    """Yield supported source files under root while pruning ignored paths."""
     if not root.exists():
         return
 
     if root.is_file():
-        if root.suffix in SUPPORTED_EXTENSIONS and not _is_skipped_file(root.name):
+        if (
+            root.suffix in SUPPORTED_EXTENSIONS
+            and not _is_skipped_file(root.name)
+            and _is_within_size_limit(root)
+        ):
             yield root
         return
 
     for dirpath, dirnames, filenames in os.walk(root):
-        # Pruning in-place prevents descending into ignored directory trees
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in SKIP_DIRS and not _matches_exclude(d, excludes)
+        ]
         for filename in filenames:
             if _is_skipped_file(filename):
                 continue
-            if Path(filename).suffix in SUPPORTED_EXTENSIONS:
-                yield Path(dirpath, filename)
+            candidate = Path(dirpath, filename)
+            if candidate.suffix not in SUPPORTED_EXTENSIONS:
+                continue
+            try:
+                rel = str(candidate.relative_to(root))
+            except ValueError:
+                rel = candidate.name
+            if _matches_exclude(rel, excludes) or not _is_within_size_limit(candidate):
+                continue
+            yield candidate
 
 
 # Backwards compatibility alias

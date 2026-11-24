@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sloplinter"
-version = "0.1.0"
-description = "Zero-bloat CLI linter that detects AI-generated code slop across Python, JS/TS, Rust, C/C++, C#, Go, and Java"
+version = "0.2.0"
+description = "Zero-bloat CLI linter & GitHub Action that detects AI-generated code slop across Python, JS/TS, Rust, C/C++, C#, Go, and Java"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
-keywords = ["linter", "ast", "cli", "ai", "code-quality"]
+keywords = ["linter", "ast", "cli", "ai", "code-quality", "ai-slop", "github-action"]
 dependencies = [
     "rich>=13.0.0",
 ]
