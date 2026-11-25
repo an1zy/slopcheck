@@ -1,41 +1,46 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="820" height="360" viewBox="0 0 820 360">
 <defs>
-<linearGradient id="topGlow" x1="0%" y1="0%" x2="100%" y2="0%">
-<stop offset="0%" stop-color="#10b981"/>
-<stop offset="100%" stop-color="#34d399"/>
+<radialGradient id="scGlow" cx="16%" cy="8%" r="55%">
+<stop offset="0%" stop-color="#ffffff" stop-opacity="0.075"/>
+<stop offset="100%" stop-color="#0a0a0a" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="scGlass" x1="0%" y1="0%" x2="0%" y2="100%">
+<stop offset="0%" stop-color="#ffffff" stop-opacity="0.065"/>
+<stop offset="100%" stop-color="#ffffff" stop-opacity="0.02"/>
 </linearGradient>
 </defs>
-<rect width="820" height="360" rx="16" fill="#09090b"/>
-<rect x="12" y="12" width="796" height="336" rx="14" fill="#111116" stroke="#27272a"/>
-<rect x="12" y="12" width="796" height="4" rx="2" fill="url(#topGlow)"/>
-<text x="36" y="52" fill="#fafafa" font-size="18" font-weight="800" font-family="system-ui, -apple-system, Segoe UI, sans-serif" letter-spacing="0.5">SLOPCHECK</text>
-<text x="156" y="52" fill="#a1a1aa" font-size="15" font-weight="600" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/ an1zy/slopcheck</text>
-<rect x="530" y="34" width="110" height="24" rx="6" fill="#18181b" stroke="#27272a"/>
-<text x="585" y="50" text-anchor="middle" fill="#a1a1aa" font-size="10.5" font-weight="700" font-family="system-ui, sans-serif">FULL REPO</text>
-<rect x="650" y="34" width="134" height="24" rx="6" fill="#052e22" stroke="#10b981"/>
-<text x="717" y="50" text-anchor="middle" fill="#34d399" font-size="11" font-weight="800" font-family="system-ui, sans-serif" letter-spacing="0.8">CLEAN</text>
-<line x1="36" y1="74" x2="784" y2="74" stroke="#1f1f27"/>
-<rect x="36" y="94" width="236" height="196" rx="14" fill="#0d1117" stroke="#1f2937"/>
-<circle cx="154" cy="184" r="64" fill="none" stroke="#10b981" stroke-opacity="0.28" stroke-width="12"/>
-<circle cx="154" cy="184" r="64" fill="none" stroke="#10b981" stroke-width="12" stroke-linecap="round" stroke-dasharray="402.12" stroke-dashoffset="402.12" transform="rotate(-90 154 184)"/>
-<text x="154" y="191" text-anchor="middle" fill="#fafafa" font-size="34" font-weight="800" font-family="system-ui, sans-serif">0%</text>
-<text x="154" y="213" text-anchor="middle" fill="#71717a" font-size="10.5" font-weight="700" letter-spacing="1.2" font-family="system-ui, sans-serif">SLOP SCORE</text>
-<text x="154" y="272" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="system-ui, sans-serif">0-10% Clean · 11-35% Sus · 36+ Slop</text>
-<rect x="296" y="94" width="114" height="54" rx="10" fill="#14141b" stroke="#27272a"/>
-<text x="310" y="114" fill="#71717a" font-size="10" font-weight="700" letter-spacing="1" font-family="system-ui, -apple-system, Segoe UI, sans-serif">FILES</text>
-<text x="310" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">14</text>
-<rect x="420" y="94" width="114" height="54" rx="10" fill="#14141b" stroke="#27272a"/>
-<text x="434" y="114" fill="#71717a" font-size="10" font-weight="700" letter-spacing="1" font-family="system-ui, -apple-system, Segoe UI, sans-serif">LINES</text>
-<text x="434" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">2,952</text>
-<rect x="544" y="94" width="114" height="54" rx="10" fill="#14141b" stroke="#27272a"/>
-<text x="558" y="114" fill="#71717a" font-size="10" font-weight="700" letter-spacing="1" font-family="system-ui, -apple-system, Segoe UI, sans-serif">ISSUES</text>
-<text x="558" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">0</text>
-<rect x="668" y="94" width="114" height="54" rx="10" fill="#14141b" stroke="#27272a"/>
-<text x="682" y="114" fill="#71717a" font-size="10" font-weight="700" letter-spacing="1" font-family="system-ui, -apple-system, Segoe UI, sans-serif">TIME</text>
-<text x="682" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">0.26s</text>
-<rect x="296" y="174" width="486" height="96" rx="10" fill="#0d1117" stroke="#1f2937"/>
-<text x="539" y="216" text-anchor="middle" fill="#10b981" font-size="14" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">ZERO SLOP PATTERNS DETECTED</text>
-<text x="539" y="238" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="system-ui, -apple-system, Segoe UI, sans-serif">AST &amp; polyglot heuristics found zero bloat, clichés, or silent catches.</text>
-<text x="36" y="340" fill="#52525b" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">$ uvx sloplinter .</text>
-<text x="784" y="340" text-anchor="end" fill="#52525b" font-size="11" font-family="system-ui, sans-serif">github.com/an1zy/slopcheck</text>
+<rect width="820" height="360" rx="16" fill="#0a0a0a"/>
+<rect width="820" height="360" rx="16" fill="url(#scGlow)"/>
+<rect x="12" y="12" width="796" height="336" rx="14" fill="url(#scGlass)" stroke="#ffffff" stroke-opacity="0.1"/>
+<line x1="24" y1="13" x2="796" y2="13" stroke="#ffffff" stroke-opacity="0.18"/>
+<text x="36" y="52" fill="#ffffff" font-size="17" font-weight="700" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" letter-spacing="-0.3">slopcheck<tspan fill="#71717a">.</tspan></text>
+<text x="132" y="52" fill="#8e8e8e" font-size="14" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/ an1zy/slopcheck</text>
+<rect x="530" y="34" width="110" height="24" rx="12" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.08"/>
+<text x="585" y="50" text-anchor="middle" fill="#8e8e8e" font-size="10.5" font-weight="600" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">FULL REPO</text>
+<rect x="650" y="34" width="134" height="24" rx="12" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.34"/>
+<text x="717" y="50" text-anchor="middle" fill="#6ee7b7" font-size="10.5" font-weight="700" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" letter-spacing="0.8">CLEAN</text>
+<line x1="36" y1="74" x2="784" y2="74" stroke="#ffffff" stroke-opacity="0.08"/>
+<rect x="36" y="94" width="236" height="196" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.08"/>
+<circle cx="154" cy="184" r="64" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="11"/>
+<circle cx="154" cy="184" r="64" fill="none" stroke="#ffffff" stroke-width="11" stroke-linecap="round" stroke-dasharray="402.12" stroke-dashoffset="402.12" transform="rotate(-90 154 184)"/>
+<text x="154" y="191" text-anchor="middle" fill="#ffffff" font-size="33" font-weight="700" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">0%</text>
+<text x="154" y="213" text-anchor="middle" fill="#8e8e8e" font-size="10" font-weight="600" letter-spacing="1.1" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">SLOP SCORE</text>
+<text x="154" y="272" text-anchor="middle" fill="#737373" font-size="10.5" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">0-10% Clean · 11-35% Sus · 36+ Slop</text>
+<rect x="296" y="94" width="114" height="54" rx="10" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.075"/>
+<text x="310" y="114" fill="#8e8e8e" font-size="10" font-weight="600" letter-spacing="0.8" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">FILES</text>
+<text x="310" y="137" fill="#ffffff" font-size="17" font-weight="700" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">14</text>
+<rect x="420" y="94" width="114" height="54" rx="10" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.075"/>
+<text x="434" y="114" fill="#8e8e8e" font-size="10" font-weight="600" letter-spacing="0.8" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">LINES</text>
+<text x="434" y="137" fill="#ffffff" font-size="17" font-weight="700" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">2,941</text>
+<rect x="544" y="94" width="114" height="54" rx="10" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.075"/>
+<text x="558" y="114" fill="#8e8e8e" font-size="10" font-weight="600" letter-spacing="0.8" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">ISSUES</text>
+<text x="558" y="137" fill="#ffffff" font-size="17" font-weight="700" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">0</text>
+<rect x="668" y="94" width="114" height="54" rx="10" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.075"/>
+<text x="682" y="114" fill="#8e8e8e" font-size="10" font-weight="600" letter-spacing="0.8" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">TIME</text>
+<text x="682" y="137" fill="#ffffff" font-size="17" font-weight="700" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">0.30s</text>
+<rect x="296" y="174" width="486" height="96" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.075"/>
+<text x="539" y="216" text-anchor="middle" fill="#6ee7b7" font-size="13.5" font-weight="600" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">ZERO SLOP PATTERNS DETECTED</text>
+<text x="539" y="238" text-anchor="middle" fill="#8e8e8e" font-size="12" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">AST &amp; polyglot heuristics found zero bloat, clichés, or silent catches.</text>
+<text x="36" y="340" fill="#5a5a5a" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">$ uvx sloplinter .</text>
+<text x="784" y="340" text-anchor="end" fill="#5a5a5a" font-size="11" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">github.com/an1zy/slopcheck</text>
 </svg>
