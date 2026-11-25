@@ -23,6 +23,9 @@ RULE_HEX = {
     "useless-wrapper": "#38bdf8",
     "captain-comment": "#22d3ee",
     "redundant-boolean": "#facc15",
+    "duplicate-helper": "#f472b6",
+    "test-theatre": "#fb7185",
+    "security-slop": "#ef4444",
 }
 
 

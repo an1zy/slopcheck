@@ -16,4 +16,4 @@ __all__ = [
     "iter_source_files",
     "scan_target",
 ]
-__version__ = "0.2.0"
+__version__ = "0.3.0"

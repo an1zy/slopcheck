@@ -158,9 +158,12 @@ Score thresholds:
 
 | Rule | Weight | Languages | What it catches |
 | :--- | :---: | :--- | :--- |
+| `security-slop` | 15 | Python, JS/TS | `verify=False`, dynamic `shell=True`, `eval`/`exec`, CORS `*`+creds, hardcoded tokens |
 | `silent-except` | 15 | Python | Catch handler containing only `pass`, `...`, or lone `print` |
 | `silent-catch` | 15 | JS/TS, Rust, C/C++, C#, Go, Java | Empty or suppressed catch blocks |
 | `ai-cliche` | 12 | All supported | Markers like `TODO: implement`, `placeholder`, `in a real-world`, `for brevity` |
+| `duplicate-helper` | 12 | Python | Cross-file normalized AST clone reimplementing an existing helper |
+| `test-theatre` | 12 | Python, JS/TS | Tests with zero assertions or constant tautologies (`assert True`, `expect(true).toBe(true)`) |
 | `emoji-slop` | 10 | All supported | Decorative emojis in comments and log/print statements |
 | `deep-nesting` | 10 | Python | Control structure nesting depth >= 4 (ignoring `elif`) |
 | `debug-print` | 8 | All supported | Print calls with debug prefixes (`debug`, `here`, `test`, `asdf`, etc.) |

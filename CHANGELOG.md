@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 (2026-11-25)
+
+### Added
+- **Semantic PR Gate (`duplicate-helper`, `test-theatre`, `security-slop`):**
+  - `duplicate-helper`: cross-file normalized AST structural fingerprinting detects newly added functions that reimplement existing helpers across the repository (works in `--diff` mode too).
+  - `test-theatre`: detects Python `test_*` functions without assertions and tautological assertions (`assert True`, `expect(true).toBe(true)`).
+  - `security-slop`: catches unreviewed AI security shortcuts (`verify=False`, dynamic `subprocess(..., shell=True)`, dynamic `eval`/`exec`, `allow_origins=["*"]` with `allow_credentials=True`, hardcoded API tokens).
+- `--no-semantic` flag to run only fast syntactic/AST style heuristics.
+
 ## 0.2.0 (2026-11-25)
 
 ### Added

@@ -23,16 +23,16 @@
 <text x="154" y="272" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="system-ui, sans-serif">0-10% Clean · 11-35% Sus · 36+ Slop</text>
 <rect x="296" y="94" width="114" height="54" rx="10" fill="#14141b" stroke="#27272a"/>
 <text x="310" y="114" fill="#71717a" font-size="10" font-weight="700" letter-spacing="1" font-family="system-ui, -apple-system, Segoe UI, sans-serif">FILES</text>
-<text x="310" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">12</text>
+<text x="310" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">14</text>
 <rect x="420" y="94" width="114" height="54" rx="10" fill="#14141b" stroke="#27272a"/>
 <text x="434" y="114" fill="#71717a" font-size="10" font-weight="700" letter-spacing="1" font-family="system-ui, -apple-system, Segoe UI, sans-serif">LINES</text>
-<text x="434" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">2,387</text>
+<text x="434" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">2,952</text>
 <rect x="544" y="94" width="114" height="54" rx="10" fill="#14141b" stroke="#27272a"/>
 <text x="558" y="114" fill="#71717a" font-size="10" font-weight="700" letter-spacing="1" font-family="system-ui, -apple-system, Segoe UI, sans-serif">ISSUES</text>
 <text x="558" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">0</text>
 <rect x="668" y="94" width="114" height="54" rx="10" fill="#14141b" stroke="#27272a"/>
 <text x="682" y="114" fill="#71717a" font-size="10" font-weight="700" letter-spacing="1" font-family="system-ui, -apple-system, Segoe UI, sans-serif">TIME</text>
-<text x="682" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">0.09s</text>
+<text x="682" y="137" fill="#f4f4f5" font-size="17" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">0.26s</text>
 <rect x="296" y="174" width="486" height="96" rx="10" fill="#0d1117" stroke="#1f2937"/>
 <text x="539" y="216" text-anchor="middle" fill="#10b981" font-size="14" font-weight="700" font-family="system-ui, -apple-system, Segoe UI, sans-serif">ZERO SLOP PATTERNS DETECTED</text>
 <text x="539" y="238" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="system-ui, -apple-system, Segoe UI, sans-serif">AST &amp; polyglot heuristics found zero bloat, clichés, or silent catches.</text>

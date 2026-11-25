@@ -9,6 +9,12 @@ from slopcheck.core import Issue, calculate_score, iter_source_files
 from slopcheck.diff import collect_diff_lines
 from slopcheck.polyglot import check_polyglot
 from slopcheck.rules import scan_python
+from slopcheck.semantic import (
+    check_duplicate_helpers,
+    check_security_slop_python,
+    check_semantic_polyglot,
+    check_test_theatre_python,
+)
 
 
 def get_verdict(score: int) -> tuple[str, str]:
@@ -85,16 +91,80 @@ class ScanResult:
         }
 
 
-def _scan_file_source(file_path: Path, source: str) -> list[Issue]:
+def _parse_python_ast(file_path: Path, source: str) -> ast.AST | None:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            return ast.parse(source, filename=str(file_path))
+    except SyntaxError:
+        return None
+
+
+def _scan_file_source(
+    file_path: Path,
+    source: str,
+    tree: ast.AST | None = None,
+    semantic: bool = True,
+) -> list[Issue]:
     if file_path.suffix == ".py":
+        parsed = tree if tree is not None else _parse_python_ast(file_path, source)
+        issues = scan_python(file_path, source, parsed)
+        if semantic:
+            issues.extend(check_test_theatre_python(file_path, parsed))
+            issues.extend(check_security_slop_python(file_path, source, parsed))
+        return issues
+
+    issues = check_polyglot(file_path, source)
+    if semantic:
+        issues.extend(check_semantic_polyglot(file_path, source))
+    return issues
+
+
+def _collect_repo_python_trees(target: Path, excludes: tuple[str, ...]) -> list[tuple[Path, ast.AST]]:
+    trees: list[tuple[Path, ast.AST]] = []
+    for p in iter_source_files(target, excludes=excludes):
+        if p.suffix != ".py":
+            continue
         try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", SyntaxWarning)
-                tree = ast.parse(source, filename=str(file_path))
-        except SyntaxError:
-            tree = None
-        return scan_python(file_path, source, tree)
-    return check_polyglot(file_path, source)
+            src = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        tree = _parse_python_ast(p, src)
+        if tree is not None:
+            trees.append((p.resolve(), tree))
+    return trees
+
+
+def _append_file_issues(
+    file_issues: dict[Path, list[Issue]],
+    all_issues: list[Issue],
+    file_path: Path,
+    new_issues: list[Issue],
+) -> None:
+    if not new_issues:
+        return
+    merged = file_issues.get(file_path, [])
+    merged.extend(new_issues)
+    merged.sort(key=lambda i: (i.line, i.rule))
+    file_issues[file_path] = merged
+    all_issues.extend(new_issues)
+
+
+def _apply_duplicate_checks(
+    target: Path,
+    excludes: tuple[str, ...],
+    scanned_trees: list[tuple[Path, ast.AST]],
+    diff_map: dict[Path, set[int]] | None,
+    file_issues: dict[Path, list[Issue]],
+    all_issues: list[Issue],
+) -> None:
+    corpus = _collect_repo_python_trees(target, excludes) if diff_map is not None else scanned_trees
+    for dup in check_duplicate_helpers(scanned_trees, all_trees=corpus):
+        if diff_map is not None:
+            matched_lines = diff_map.get(dup.path) or diff_map.get(dup.path.resolve(), set())
+            if dup.line not in matched_lines:
+                continue
+        _append_file_issues(file_issues, all_issues, dup.path, [dup])
 
 
 def scan_target(
@@ -103,6 +173,7 @@ def scan_target(
     diff_base: str | None = None,
     staged: bool = False,
     excludes: tuple[str, ...] = (),
+    semantic: bool = True,
 ) -> ScanResult:
     """Scan a directory, file, or git diff for AI-generated code slop."""
     start_time = time.perf_counter()
@@ -118,6 +189,7 @@ def scan_target(
     total_lines = 0
     all_issues: list[Issue] = []
     file_issues: dict[Path, list[Issue]] = {}
+    scanned_trees: list[tuple[Path, ast.AST]] = []
 
     for file_path in files:
         try:
@@ -125,19 +197,23 @@ def scan_target(
         except OSError:
             continue
 
+        tree = _parse_python_ast(file_path, source) if file_path.suffix == ".py" else None
+        if tree is not None:
+            scanned_trees.append((file_path.resolve(), tree))
+
+        raw_issues = _scan_file_source(file_path, source, tree=tree, semantic=semantic)
         if diff_map is not None:
             changed_lines = diff_map[file_path]
             total_lines += len(changed_lines)
-            raw_issues = _scan_file_source(file_path, source)
             current_issues = [i for i in raw_issues if i.line in changed_lines]
         else:
             total_lines += len(source.splitlines())
-            current_issues = _scan_file_source(file_path, source)
+            current_issues = raw_issues
 
-        if current_issues:
-            current_issues.sort(key=lambda i: (i.line, i.rule))
-            file_issues[file_path] = current_issues
-            all_issues.extend(current_issues)
+        _append_file_issues(file_issues, all_issues, file_path, current_issues)
+
+    if semantic and scanned_trees:
+        _apply_duplicate_checks(target, excludes, scanned_trees, diff_map, file_issues, all_issues)
 
     elapsed = time.perf_counter() - start_time
     score = calculate_score(all_issues, total_lines)

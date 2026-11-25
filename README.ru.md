@@ -129,9 +129,12 @@ jobs:
 
 | Правило | Вес | Языки | Что ловит |
 | :--- | :---: | :--- | :--- |
+| `security-slop` | 15 | Python, JS/TS | `verify=False`, динамический `shell=True`, `eval`/`exec`, CORS `*`+creds, зашитые токены |
 | `silent-except` | 15 | Python | Обработчик исключений с `pass`, `...` или одиночным `print` |
 | `silent-catch` | 15 | JS/TS, Rust, C/C++, C#, Go, Java | Пустые блоки `catch` |
 | `ai-cliche` | 12 | Все | Маркеры вроде `TODO: implement`, `placeholder`, `in a real-world`, `for brevity` |
+| `duplicate-helper` | 12 | Python | Кросс-файловый AST-клон существующего хелпера в репозитории |
+| `test-theatre` | 12 | Python, JS/TS | Тесты без проверок или с тавтологиями (`assert True`, `expect(true).toBe(true)`) |
 | `emoji-slop` | 10 | Все | Декоративные эмодзи в комментариях и логах |
 | `deep-nesting` | 10 | Python | Вложенность конструкций >= 4 (игнорируя `elif`) |
 | `debug-print` | 8 | Все | Отладочный вывод (`debug`, `here`, `test`, `asdf` и др.) |

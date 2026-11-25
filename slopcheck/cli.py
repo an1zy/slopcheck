@@ -22,6 +22,9 @@ RULE_COLORS = {
     "deep-nesting": "red",
     "wildcard-import": "magenta",
     "useless-wrapper": "cyan",
+    "duplicate-helper": "magenta",
+    "test-theatre": "red",
+    "security-slop": "bold red",
 }
 
 
@@ -150,6 +153,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Show only top N worst files in console output",
     )
     parser.add_argument(
+        "--no-semantic",
+        action="store_true",
+        help="Disable cross-file duplicate, test-theatre, and security checks",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -168,6 +176,7 @@ def main() -> None:
             diff_base=args.base,
             staged=args.staged,
             excludes=tuple(args.exclude),
+            semantic=not args.no_semantic,
         )
     except GitDiffError as exc:
         print(f"slopcheck diff error: {exc}", file=sys.stderr)
